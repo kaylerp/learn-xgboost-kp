@@ -90,6 +90,8 @@ To start with please review CreateFeatureVectors1.java.  This implementation is 
      javaVector_train.libsvm
 
 *Question 1:* What percentage of input lines end up in the vector train and eval files?
+     - 400/2600 = about 15% in eval file
+     - thus 85% to train
 
 
 ### B. Training a model
@@ -100,6 +102,10 @@ We want to train our first model and assess the accuracy of the model against th
 Notice we are loading the feature_names, and then the train and eval vector files.  Now would be a good time to review the [xgboost train API documentation](https://xgboost.readthedocs.io/en/latest/python/python_api.html#module-xgboost.training).  Notice that the classifier output from train is used to predict against the test set.  The predictions are then labeled depending on their output probability, and the false-positives and false-negatives are computed by comparing those labels with the input labels.
 
 *Question 2:* What is the accuracy of your model and how is accuracy computed?
+     - the output after running py/train-simple.py was: 
+          35 false positives, 58 false negatives
+          Accuracy: 76.75%
+     - The accuracy was computed by comparing the predicted values to the test values that we set aside earlier. It is the percentage of the correct predictions vs the actual test set values.
 
 
 ### C. Building and refining features
@@ -120,10 +126,13 @@ What if instead of comparing whole name strings, we looked for the number of nam
      Run the CreateFeatureVectors2.java file.
 
 *Question 3:* How did the output vectors change?
+     -It seems like the vectors include more than just binary numbers (0,1). Each instance vector is longer now than before. While reateFeatureVectors1 only included exact matches, CreateFeatureVectors2 includes overlap count. Thus more indices are included in the vector files after running CreateFeatureVectors2.java
 
      Train the model with the new vectors.
 
 *Question 4:* What was the accuracy with the improved name comparison?
+     - 32 false positives, 42 false negatives
+          Accuracy: 81.50%
 
 Consider these questions:
 * Remember we just compared all fields exactly. What could we do better when representing the data to the classifier?
@@ -136,10 +145,16 @@ So far we have made a few observations. Simply comparing name strings doesn't be
      Uncomment the differentNames else clause in CreateFeatureVectors2.java
 
 *Question 5:* What will happen with the differentNames clause uncommented?
+     - negatives were added to feature values probably suggesting that that indice does not match and thus there is less of a chance of this person vs person is a match. My guess is that the accuracy will slightly decrease?
+     - (after running it, it actually increased)
 
      Create the new vectors and train the model.
 
 *Question 6:* Was the accuracy improved?  How much?  How is this implementation flawed?
+     - New accuracy: 36 false positives, 29 false negatives
+                         Accuracy: 83.75%
+     - I feel like the negative values are way bigger than the positives which could throw off the model.
+     For example, if a person is missing their birth place on one instance, but has it on the other and if the birth place is 4 words, then its going to be -4 for that index. Negative numbers can have a big impact when the fact is, there is just missing data. I feel like it should never get to be such a big negative number.
 
 Next consider the dates in the input data.  Close inspection will show that often birth dates are estimates, based on age declared at the time the record is made.  So we need to come up with a way to represent year alignment that is close - and let the machine learn which cases it should pay attention to that.  We have already called out the date fields in CreateFeatureVectors2.java (DATE_FIELDS = {10, 24, 38, 66}).
 
@@ -148,10 +163,16 @@ Next consider the dates in the input data.  Close inspection will show that ofte
 Remember that 0 is the default value, and means no data.  So how will we represent year alignment, and the differences?
 
 *Question 7:* What value will the date fields contain if the year differs by 1?  What about if they differ by 2, or 5?
+     - if dateDifference = 1, then feature value will be 4
+     - if dateDifference = 2, then feature value = 3
+     - if dateDifference = 5, then feature value - 0
 
      Run CreateFeatureVectors2.java after uncommenting the code that compares the years into buckets and train a new model.
 
 *Question 8:* What is the accuracy now?  How could you improve this bucketing?
+     - 32 false positives, 29 false negatives
+          Accuracy: 84.75%
+     - We could extend the range to 10. And scale the points from there. (aka if dateDifference = 0, then feature value = 5, dateDifference = 1 then feature value = 4 ... like before but then if between 3 and 5 then featrue value is 2, then if between 6-10 then feature value = 1, else 0  ) OR if there isn't a date then put a -1?
 
 
 ### D. Analyzing the model
@@ -164,8 +185,13 @@ To start with you can see we will graph the accuracy at each training iteration.
 The train.py script will present a number of graphs: Error rates for each iteration, Logloss for each training iteration, Precision/Recall curve for your model, feature importance for your model, and the decision tree from your model's first iteration.  (Note: You can close each graph as it pops up, and the next graph will appear.  If you are using Windows and WSL the graphs will be created in your artifacts directory.)  Please review each graph and spend some time on the feature importance, and tree plot graphs.
 
 *Question 9:* What are the three most important features of your model?
+     for some reason this is my top 3 (I probably missed a step)
+     - spouse_name
+     - birth_year
+     - person_name
 
 *Question 10:* Where in the first decision tree plot do you expect your most important feature to be?  Where is it actually, and why?
+     - Because spouse_name is apparently the most important feature overall, I assumed that it would be one of the first divides/nodes in the decision tree. BUT it doesn't even show up. AS to why that is, my guess is that because its just the FIRST decision tree, meaning that the most important features have not been figured out at this point and thus possibly not included until later trees as the model learns.
 
 Note: You can modify the 'num_trees' argument in xgb.plot_tree to see the decision tree plot for other iterations.  This gives you some idea of what is happening with each new iteration.  The classifier runs over all the decision trees by default - but you can run it only up to any number of trees in your saved model with additional parameters.
 
@@ -178,6 +204,10 @@ Xgboost has an [early stopping rounds](https://xgboost.readthedocs.io/en/latest/
      Find the 'early_stopping_rounds' line in train.py, and exchange that line for the one above it.  Try your training again.
 
 *Question 11:* What iteration did your model stop on?  Was your accuracy improved?
+     - Iteration at which it stops: 375
+     - Yes accuracy was improved.
+     - 27 false positives, 32 false negatives
+          Accuracy: 85.25%
 
 The Precision/Recall graph shows the tension between getting all the answers right, and getting answers for all the questions.  You can find an optimal point on the curve where you maximize precision or recall, or maybe you want to balance them.  Then you can find on that curve what the precision threshold is at that point.  If you are interested in pursuing threshold analysis you can look into the data behind the P/R curve.
 
@@ -215,10 +245,19 @@ We are going to experiment with the max_depth option.  This controls the depth o
      Change the max_depth from 4 to 6.  Retrain and analyze your model.
 
 *Question 12:* How is your accuracy and tree impacted by this change?
+     - when max_depth goes to 6, the accuracy improves:
+          25 false positives, 30 false negatives
+          Accuracy: 86.25%
+     - The tree diagram got bigger. It was able to go 6 levels deeper and thus use more features
 
      Try adjusting max_depth some more.
 
 *Question 13:* How is your accuracy and tree impacted by this change?  Did you find an optimal max_depth?
+
+     - as I adjusted the max_depth, my accuracy maxed out at depth = 7. Anything higher actually decreased accuracy So I think this is my optimal max_depth. 
+     Though I will say it seems to follow the graphs better at 6. I also have read that when the graph drops and then platues then that could be a sign of over fitting
+     and it seems to do that at 7?
+     - the tree became bigger by another level
 
 
 ### F. Building your data-science superpowers
@@ -231,6 +270,7 @@ Notice the train.py code we log parameters, metrics and artifacts to mlflow.  Th
 This will startup a local mlflow UI at http://127.0.0.1:5000 that you can open in your browser.  Select the `matching` experiment in the left pane if it isn't already selected.  Type `max_depth` in the box labeled 'Filter Params:' and `accuracy` in the box labeled 'Filter Metrics:'.  Click 'Search'.  You should see each of your training runs, and the parameters and metrics recorded.  Select a few runs and click 'Compare' - notice how the feature importance changed between runs.  Return to the list of runs and click on one - scroll down to the artifacts area and notice you can click on the .png artifacts to display the graphs.
 
 *Question 14:* What might be useful here in comparing training runs?
+     - this is useful to compare info to figure out what the optimal parameters are. For example, max_depth looks to be the best at 6 or 7. The artifacts are also useful to see how the feature importances changes for each max_depth.
 
 
 ### G. Choose your own adventure

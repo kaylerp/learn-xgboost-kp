@@ -24,7 +24,7 @@ with mlflow.start_run():
 
   params = {'n_jobs': 4,
             'eta': 0.1,
-            'max_depth': 4,
+            'max_depth': 10,
             'gamma': 0,
             'subsample': 1,
             'colsample_bytree': 1,
@@ -34,8 +34,8 @@ with mlflow.start_run():
 
   results = {}
   watchlist = [(train, 'train'), (test, 'test')]
-  clf = xgb.train(params, train, num_boost_rounds, watchlist, evals_result = results, verbose_eval=100)
-  # clf = xgb.train(params, train, num_boost_rounds, watchlist, early_stopping_rounds=50, evals_result = results, verbose_eval=100)
+  #clf = xgb.train(params, train, num_boost_rounds, watchlist, evals_result = results, verbose_eval=100)
+  clf = xgb.train(params, train, num_boost_rounds, watchlist, early_stopping_rounds=50, evals_result = results, verbose_eval=100)
 
   #####################################
   # Evaluate predictions
@@ -46,12 +46,14 @@ with mlflow.start_run():
   labels = test.get_label()
 
   # print(100*(sum((predictions >= 0.5) == labels) / float(len(labels))))
+  print("Best iteration:", clf.best_iteration) # added by kp for qution 11
   fp = sum((predictions >= 0.5) & (labels < 1)) # false positives
   fn = sum((predictions < 0.5) & (labels > 0)) # false negatives
   print(f"{fp} false positives, {fn} false negatives")
 
   accuracy = accuracy_score(labels, predict_labels)
   print("Accuracy: %.2f%%" % (accuracy * 100.0))
+
 
   # average_precision = average_precision_score(test.get_label(), predictions)
   # print("Average precision score: %.2f%%" % (average_precision * 100.0))
@@ -74,7 +76,8 @@ with mlflow.start_run():
     plt.ylabel('Classification ' + metric_name)
     plt.title('XGBoost Classification ' + metric_name)
     plt.savefig("artifacts/" + metric_name + ".png")
-    plt.show()
+    #plt.show()
+
 
   ##################################
   # Plot decision tree, feature importance stack and precision-recall curve
@@ -85,18 +88,17 @@ with mlflow.start_run():
   plt.ylabel('Precision')
   plt.title('Precision-Recall curve')
   plt.savefig("artifacts/PR_curve.png")
-  plt.show()
-
+  #plt.show() 
   plt.rcParams["figure.figsize"] = (14,7)
   xgb.plot_importance(clf, grid=False)
   plt.savefig("artifacts/importance.png")
-  plt.show()
+  #plt.show()
 
   plt.rcParams["figure.figsize"] = (14,3)
   xgb.plot_tree(clf, num_trees=0)
   plt.title('Decision Tree')
   plt.savefig("artifacts/tree.png", dpi = 600)
-  plt.show()
+  #plt.show()
 
   # persist the model and save artficats to mlflow
   clf.save_model('artifacts/xgb.model')
